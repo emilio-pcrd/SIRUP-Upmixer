@@ -1,0 +1,73 @@
+dataset_params:
+  im_path: '/mnt/ssd-samsung/riken_copy/paper/'
+  input_channels : 2
+  im_size : None
+  w_size : 1024
+  h_size : 16
+  name: 'steering_vectors'
+
+diffusion_params:
+  num_timesteps : 1000
+  beta_start : 0.00085
+  beta_end : 0.012
+  condition: True
+
+ldm_params:
+  cond_channels: 2
+  down_channels: [32, 64, 128, 128]
+  mid_channels: [128, 128]
+  down_sample: [True, True, False]
+  attn_down : [True, True, True]
+  time_emb_dim: 128
+  norm_channels : 32
+  num_heads : 8
+  conv_out_channels : 32
+  num_down_layers: 1
+  num_mid_layers: 1
+  num_up_layers: 1
+  condition: True
+  cross_attn: True
+  z_channels: 2
+
+autoencoder_params:
+  z_channels: 2
+  codebook_size : 8192
+  down_channels : [32, 64, 128, 128]
+  mid_channels : [128, 128]
+  down_sample : [True, True, False]
+  attn_down : [False, False, False]
+  norm_channels: 32
+  num_heads: 8
+  num_down_layers : 1
+  num_mid_layers : 1
+  num_up_layers : 1
+  scale_factor : 0.18215
+
+train_params:
+  seed : 1111
+  task_name: 'runs'
+  ldm_batch_size: 4
+  autoencoder_batch_size: 32
+  disc_start: 15000
+  disc_weight: 0.5
+  codebook_weight: 1
+  commitment_beta: 0.2
+  perceptual_weight: 1
+  kl_weight: 0.00005
+  ldm_epochs : 100
+  autoencoder_epochs : 40
+  num_samples : 25
+  num_grid_rows : 5
+  ldm_lr: 0.0003
+  autoencoder_lr: 0.0003
+  autoencoder_acc_steps: 1
+  autoencoder_img_save_steps: 8
+  load_ckpt_vae: False
+  load_ckpt_ldm: False
+  save_latents: False
+  train_decoder_only: False
+  ldm_ckpt_name: 'weights/v2.3/ddpm_ckpt_ideal_NOISE.pth'
+  vae_autoencoder_ckpt_name: 'weights/v2.3/vae_autoencoder_ckpt_ideal.pth'
+  vqvae_autoencoder_ckpt_name: 'weights/v2.3/vqvae_autoencoder_ckpt.pth'
+  vae_discriminator_ckpt_name: 'weights/v2.3/vae_discriminator1_ckpt_none.pth'
+  vqvae_discriminator_ckpt_name: 'weights/v2.3/vqvae_discriminator_ckpt.pth'
