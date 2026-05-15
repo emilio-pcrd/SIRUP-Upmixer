@@ -8,135 +8,15 @@ import random
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from utils import LinearNoiseScheduler
-from models.denoiser import Unet, EncoderCond
+from models.denoiser import Unet
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ExponentialLR, LambdaLR
 from models.vae import VAE
 from torch.utils.data import random_split
-from torch.utils.data import Dataset
-import pickle
 import glob
-
-
-# class SVectDataset(Dataset):
-#     def __init__(self, data_dir, get_idx=False):
-#         super().__init__()
-#         self.data_dir = data_dir
-#         self.get_idx = get_idx
-
-#     def __len__(self):
-#         return len(os.listdir(self.data_dir))
-
-#     def __getitem__(self, idx):
-#         data_path = os.path.join(self.data_dir, f"room_sim_{idx:04d}.pkl")
-#         with open(data_path, 'rb') as f:
-#             data = pickle.load(f)
-
-#         svect_hoa, svect_foa = data['svect_hoa'], data['svect_foa']
-#         random_noise = np.random.randn(*svect_hoa.shape) * 1e-2
-#         svect_foa += random_noise
-#         svect_hoa, svect_foa = svect_hoa, svect_foa
-#         if self.get_idx:
-#             return svect_foa, svect_hoa, idx
-
-#         return svect_foa, svect_hoa
-
-
-
-class SVectDataset(Dataset):
-    def __init__(self, base_data_dir, get_idx=False, num_files_per_folder=1500):
-        super().__init__()
-        self.base_data_dir = base_data_dir
-        self.get_idx = get_idx
-        self.num_files_per_folder = num_files_per_folder
-
-        # Find all subdirectories in the base directory, excluding system folders
-        self.data_folders = []
-        ignore_folders = {'__pycache__', '.git', '.vscode', '.idea', 'node_modules', '.DS_Store'}
-
-        for item in os.listdir(base_data_dir):
-            # Skip if it's in the ignore list
-            if item in ignore_folders:
-                continue
-
-            # Skip hidden folders (starting with .)
-            if item.startswith('.'):
-                continue
-
-            folder_path = os.path.join(base_data_dir, item)
-            if os.path.isdir(folder_path):
-                # Additional check: make sure the folder contains .pkl files
-                pkl_files = [f for f in os.listdir(folder_path) if f.endswith('.pkl')]
-                if len(pkl_files) > 0:
-                    self.data_folders.append(folder_path)
-                else:
-                    print(f"Skipping folder {item} - no .pkl files found")
-
-        # Sort folders for consistency
-        self.data_folders.sort()
-
-        print(f"Found {len(self.data_folders)} valid data folders:")
-        for i, folder in enumerate(self.data_folders):
-            folder_name = os.path.basename(folder)
-            # Count actual files in the folder for verification
-            pkl_count = len([f for f in os.listdir(folder) if f.endswith('.pkl')])
-            print(f"  {i+1}. {folder_name} ({pkl_count} .pkl files)")
-
-        if len(self.data_folders) == 0:
-            raise ValueError(f"No valid data folders found in {base_data_dir}")
-
-        # Calculate total dataset size
-        # We assume each folder has the same number of files (0000 to num_files_per_folder-1)
-        self.total_files = len(self.data_folders) * self.num_files_per_folder
-
-        # Create a mapping of dataset index to (folder_idx, file_idx)
-        self.index_mapping = []
-        for folder_idx in range(len(self.data_folders)):
-            for file_idx in range(self.num_files_per_folder):
-                self.index_mapping.append((folder_idx, file_idx))
-
-        # Shuffle the mapping to ensure random sampling across folders
-        import random
-        random.shuffle(self.index_mapping)
-
-    def __len__(self):
-        return self.total_files
-
-    def __getitem__(self, idx):
-        # Get the folder and file index from the shuffled mapping
-        folder_idx, file_idx = self.index_mapping[idx]
-        folder_path = self.data_folders[folder_idx]
-
-        data_path = os.path.join(folder_path, f"room_sim_{file_idx:04d}.pkl")
-
-        try:
-            with open(data_path, 'rb') as f:
-                data = pickle.load(f)
-        except FileNotFoundError:
-            # If file doesn't exist, try a random file from a random folder
-            print(f"Warning: File {data_path} not found, selecting random alternative")
-            import random
-            random_folder_idx = random.randint(0, len(self.data_folders) - 1)
-            random_file_idx = random.randint(0, self.num_files_per_folder - 1)
-            folder_path = self.data_folders[random_folder_idx]
-            data_path = os.path.join(folder_path, f"room_sim_{random_file_idx:04d}.pkl")
-
-            with open(data_path, 'rb') as f:
-                data = pickle.load(f)
-
-        random_noise = np.random.randn(*data['svect_hoa'].shape) * 1e-2
-        svect_hoa, svect_foa = data['svect_hoa'], data['svect_foa']
-        svect_foa += random_noise
-
-        if self.get_idx:
-            # Return original idx, folder info, and file info for debugging
-            folder_name = os.path.basename(folder_path)
-            return svect_foa, svect_hoa
-
-        return svect_foa, svect_hoa
+from datasets.steering_vectors import SteeringVectorDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-from datasets import SVectDatasetMNMF
 
 def train(args):
     # Read the config file #
@@ -167,11 +47,8 @@ def train(args):
     # Instanciate dataset and dataloader
     # Create the dataset
     data_path = os.path.join(dataset_config['im_path'])
-    # dataset_train, dataset_val = SVectDatasetMNMF(os.path.join(data_path, 'train')), SVectDatasetMNMF(os.path.join(data_path, 'val'))
-    # val_size = len(dataset_val)*0.1
-    # dataset_val = torch.utils.data.Subset(dataset_val, list(range(int(val_size))))
 
-    dataset_train = SVectDataset(data_path, get_idx=False)
+    dataset_train = SteeringVectorDataset(data_path, get_idx=False, noise_std=1e-2)
     # Split the dataset into train and validation sets
     val_ratio = 0.1  # 10% for validation
     total_size = len(dataset_train)
@@ -212,16 +89,6 @@ def train(args):
     optimizer = AdamW(model.parameters(), lr=train_config['ldm_lr'], betas=(0.9, 0.999),
                       weight_decay=1e-3)
     scheduler_opt = ExponentialLR(optimizer, gamma=0.999996)
-    # inv_gamma = 1_000_000
-    # power = 0.5
-    # warmup = 0.99
-    # def lr_lambda(step):
-    #     if step < warmup:
-    #         # Linear warmup
-    #         return step / warmup
-    #     # Inverse LR decay
-    #     return (1.0 + step / inv_gamma) ** (-power)
-    # scheduler_opt = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
     criterion = torch.nn.MSELoss()
     scale_factor = autoencoder_model_config['scale_factor']

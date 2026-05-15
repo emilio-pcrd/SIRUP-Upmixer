@@ -1,14 +1,7 @@
 import math
 import torch
 import torch.nn as nn
-
-# from blocks import (
-#     DownBlock,
-#     MidBlock,
-#     EncoderBlockRes4B,
-#     DecoderBlockRes4B,
-#     UpBlockUnet
-# )
+import torch.nn.functional as F
 from models.blocks import (
     DownBlock,
     MidBlock,
@@ -19,11 +12,9 @@ from models.blocks import (
 
 class ResUNetDenoiser(nn.Module):
     def __init__(self, input_channels, hidden_dim):
-        """Unet architecture,
-        found on github. SECOND TESTS not used for last test."""
+        """Lightweight U-Net variant for latent denoising."""
         super(ResUNetDenoiser, self).__init__()
-        # u-net architecture for latent denoiser
-        self.input_channels = input_channels  # supposed to be 16 (?)
+        self.input_channels = input_channels
 
         # encoding part
         self.encoder_block1 = EncoderBlockRes4B(
@@ -72,36 +63,28 @@ class ResUNetDenoiser(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
         )
 
-        # condition
-        # concat that with input across channel dimension
-        self.cond_conv_in = nn.Conv2d(in_channels=self.im_cond_input_ch,
-                                        out_channels=self.im_cond_output_ch,
-                                        kernel_size=1,
-                                        bias=False)
-        self.conv_in_concat = nn.Conv2d(input_channels + self.im_cond_output_ch,
-                                        self.down_channels[0], kernel_size=3, padding=1)
+        self.cond_merge = nn.Conv2d(input_channels * 2, input_channels, kernel_size=1, bias=False)
 
     def forward(self, x, time, cond_input=None):
+        out = x
         if cond_input is not None:
-            # encode condition
-            im_cond = self.cond_conv_in(im_cond)
-            assert im_cond.shape[-2:] == x.shape[-2:]
-            x = torch.cat([x, im_cond], dim=1)
-            # B x (C+N) x H x W
-            out = self.conv_in_concat(x)
+            if cond_input.shape[-2:] != x.shape[-2:]:
+                cond_input = F.interpolate(cond_input, size=x.shape[-2:], mode="bilinear", align_corners=False)
+            if cond_input.shape[1] != x.shape[1]:
+                raise ValueError("cond_input must have same channel count as x")
+            out = self.cond_merge(torch.cat([x, cond_input], dim=1))
 
-        t = self.time_mlp(time)
+        _ = self.time_mlp(time)
 
-        # u-net
-        (x1_pool, x1) = self.encoder_block1(out) + t
-        (x2_pool, x2) = self.encoder_block2(x1_pool) + t
+        x1_pool, x1 = self.encoder_block1(out)
+        x2_pool, x2 = self.encoder_block2(x1_pool)
 
-        (x_center, _) = self.conv_block5a(x2_pool) + t # (bs, 128, freq_bin/8, n_mics/16?)
+        x_center, _ = self.conv_block5a(x2_pool)
 
-        x3 = self.decoder_block1(x_center, x2) + t
-        x4 = self.decoder_block2(x3, x1) + t
+        x3 = self.decoder_block1(x_center, x2)
+        x4 = self.decoder_block2(x3, x1)
 
-        (x, _) = self.after_conv_block1(x4) + t
+        _, x = self.after_conv_block1(x4)
 
         return x
 
@@ -231,8 +214,8 @@ class Unet(nn.Module):
         self.im_cond_input_ch = model_config["cond_channels"]
         self.im_cond_output_ch = im_channels
 
-        self.cond_conv_in = nn.Conv2d(in_channels=4,
-                                      out_channels=self.im_cond_output_ch,
+        self.cond_conv_in = nn.Conv2d(in_channels=2 * self.z_channels,
+                          out_channels=self.im_cond_output_ch,
                                       kernel_size=1,
                                       bias=False)
         self.conv_in_concat = nn.Conv2d(im_channels + self.im_cond_output_ch,
@@ -331,6 +314,7 @@ class Unet(nn.Module):
         if self.cond:
             assert cond_input is not None, \
                 "Model with conditioning, thus cond_input cannot be None"
+        context_hidden_states = None
         if self.image_cond:
             ###################################
             # im_cond = torch.nn.functional.interpolate(cond_input, size=x.shape[-2:])
@@ -338,6 +322,7 @@ class Unet(nn.Module):
             # enc_cond = self.cond_mlp(im_cond)
             im_cond = cond_input
             enc_cond = self.c_encoder(im_cond)
+            enc_cond = F.interpolate(enc_cond, size=x.shape[-2:], mode="bilinear", align_corners=False)
             enc_cond = self.cond_conv_in(enc_cond)
             # B x C x H x W
             assert enc_cond.shape[-2:] == x.shape[-2:], f"Need to be same shape, \
@@ -352,6 +337,8 @@ class Unet(nn.Module):
         else:
             # B x C x H x W
             out = self.conv_in(x)
+        if self.cross_attn and context_hidden_states is None:
+            raise ValueError("cross_attn=True requires image conditioning input")
         # B x C1 x H x W
         # t_emb -> B x t_emb_dim
         t_emb = get_time_embedding(torch.as_tensor(t).long(), self.t_emb_dim)
@@ -438,11 +425,8 @@ class EncoderCond(nn.Module):
 
         self.encoder_norm_out = nn.GroupNorm(self.norm_channels, self.down_channels[-1])
         self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], 2*self.z_channels, kernel_size=3, padding=1)
-        # self.encoder_view_in = lambda x: x.view(x.size(0), x.size(1), 128, 128)
 
     def forward(self, x):
-        # x_resized = self.encoder_view_in(x)
-        # out = self.encoder_conv_in(x_resized)
         out = self.encoder_conv_in(x)
         for down in self.encoder_layers:
             out = down(out)
@@ -451,25 +435,7 @@ class EncoderCond(nn.Module):
         out = self.encoder_norm_out(out)
         out = nn.SiLU()(out)
         out = self.encoder_conv_out(out)
-        # out = self.pre_quant_conv(out)
         mean, logvar = torch.chunk(out, 2, dim=1)
         std = torch.exp(0.5 * logvar)
         sample = mean + std * torch.randn(mean.shape).to(device=x.device)
         return sample, out
-
-
-# class FOAConditionEncoder(nn.Module):
-#     def __init__(self, context_dim):
-#         super().__init__()
-#         self.proj = nn.Sequential(
-#             nn.Conv1d(64, 32, kernel_size=3, padding=1),  # 2x4 = 8 input channels
-#             nn.ReLU(),
-#             nn.Conv1d(32, context_dim, kernel_size=1)
-#         )
-
-#     def forward(self, foa):  # foa: B x 2 x 32 x 32
-#         b, c1, c2, t = foa.shape
-#         x = foa.view(b, c1 * c2, t)  # B x 64 x 32
-#         x = self.proj(x)  # B x 32 x 32
-#         x = x.transpose(1, 2)  # B x 1024 x D
-#         return x

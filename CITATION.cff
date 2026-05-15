@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the ICASSP 2026 paper."
+title: "SIRUP: Diffusion-Based Virtual Upmixing of First-Order Ambisonics"
+version: 0.1.0
+authors:
+  - family-names: Picard
+    given-names: Emilio
+  - family-names: Di Carlo
+    given-names: Diego
+  - family-names: Nugraha
+    given-names: Aditya Arie
+  - family-names: Fontaine
+    given-names: Mathieu
+  - family-names: Yoshii
+    given-names: Kazuyoshi

@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from blocks import DownBlock, MidBlock, UpBlock
-# from blocks import ResEncoderBlock, ResDecoderBlock
 from models.blocks import DownBlock, MidBlock, UpBlock
 from models.blocks import ResEncoderBlock, ResDecoderBlock
 
@@ -37,7 +35,6 @@ class VAE(nn.Module):
         self.up_sample = list(reversed(self.down_sample))
 
         ##################### Encoder ######################
-        # self.encoder_view_in = lambda x: x.view(x.size(0), x.size(1), 128, 128)
         self.encoder_conv_in = nn.Conv2d(im_channels, self.down_channels[0], kernel_size=3, padding=(1, 1))
 
         # Downblock + Midblock
@@ -63,7 +60,6 @@ class VAE(nn.Module):
         self.encoder_norm_out = nn.GroupNorm(self.norm_channels, self.down_channels[-1])
         self.encoder_conv_out = nn.Conv2d(self.down_channels[-1], 2*self.z_channels, kernel_size=3, padding=1)
 
-        # Latent Dimension is 2*Latent because we are predicting mean & variance
         ####################################################
 
 
@@ -92,11 +88,8 @@ class VAE(nn.Module):
 
         self.decoder_norm_out = nn.GroupNorm(self.norm_channels, self.down_channels[0])
         self.decoder_conv_out = nn.Conv2d(self.down_channels[0], im_channels, kernel_size=3, padding=1)
-        # self.decoder_view_out = lambda x: x.view(x.size(0), x.size(1), 1024, 16)
 
     def encode(self, x):
-        # x_resized = self.encoder_view_in(x)
-        # out = self.encoder_conv_in(x_resized)
         out = self.encoder_conv_in(x)
         for down in self.encoder_layers:
             out = down(out)
@@ -105,7 +98,6 @@ class VAE(nn.Module):
         out = self.encoder_norm_out(out)
         out = nn.SiLU()(out)
         out = self.encoder_conv_out(out)
-        # out = self.pre_quant_conv(out)
         mean, logvar = torch.chunk(out, 2, dim=1)
         std = torch.exp(0.5 * logvar)
         sample = mean + std * torch.randn(mean.shape).to(device=x.device)
@@ -113,7 +105,6 @@ class VAE(nn.Module):
 
     def decode(self, z):
         out = z
-        # out = self.post_quant_conv(out)
         out = self.decoder_conv_in(out)
         for mid in self.decoder_mids:
             out = mid(out)
@@ -123,7 +114,6 @@ class VAE(nn.Module):
         out = self.decoder_norm_out(out)
         out = nn.SiLU()(out)
         out = self.decoder_conv_out(out)
-        # out = self.decoder_view_out(out)
         return out
 
     def forward(self, x):

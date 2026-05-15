@@ -1,5 +1,5 @@
 dataset_params:
-  im_path: '/mnt/ssd-samsung/riken_copy/paper/'
+  im_path: ''
   input_channels : 2
   im_size : None
   w_size : 1024
@@ -66,7 +66,7 @@ train_params:
   load_ckpt_ldm: False
   save_latents: False
   train_decoder_only: False
-  ldm_ckpt_name: 'weights/v2.3/ddpm_ckpt_ideal_NOISE.pth'
+  ldm_ckpt_name: ''
   vae_autoencoder_ckpt_name: 'weights/v2.3/vae_autoencoder_ckpt_ideal.pth'
   vqvae_autoencoder_ckpt_name: 'weights/v2.3/vqvae_autoencoder_ckpt.pth'
   vae_discriminator_ckpt_name: 'weights/v2.3/vae_discriminator1_ckpt_none.pth'
