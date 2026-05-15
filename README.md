@@ -1,7 +1,7 @@
 # SIRUP: Diffusion-Based Virtual Upmixing of First-Order Ambisonics
 
 Repository for the ICASSP 2026 paper:
-**"Diffusion-Based Virtual Upmixing of First-Order Ambisonics for Highly-Directive Source Localization and Enhancement"**
+**"SIRUP: A diffusion-based virtual upmixer of steering vectors for highly-directive spatialization with first-order ambisonics"**
 
 **Authors:** Emilio Picard, Diego Di Carlo, Aditya Arie Nugraha, Mathieu Fontaine, Kazuyoshi Yoshii
 
@@ -91,7 +91,7 @@ If you use this code, please cite the ICASSP 2026 paper.
 
 ```bibtex
 @inproceedings{picard2026sirup,
-	title={Diffusion-Based Virtual Upmixing of First-Order Ambisonics for Highly-Directive Source Localization and Enhancement},
+	title={SIRUP: A diffusion-based virtual upmixer of steering vectors for highly-directive spatialization with first-order ambisonics},
 	author={Picard, Emilio and Di Carlo, Diego and Nugraha, Aditya Arie and Fontaine, Mathieu and Yoshii, Kazuyoshi},
 	booktitle={Proceedings of IEEE ICASSP},
 	year={2026}
