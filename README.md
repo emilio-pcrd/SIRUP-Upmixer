@@ -73,12 +73,6 @@ scripts/        # Utility scripts (smoke tests, etc.)
 tests/          # Test suite mirroring repo structure
 ```
 
-## Smoke Test
-
-```bash
-python scripts/smoke_test.py --config ckpts/config.yaml
-```
-
 ## Tests
 
 ```bash
