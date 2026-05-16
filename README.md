@@ -9,7 +9,7 @@ Repository for the ICASSP 2026 paper:
 
 This project implements a VAE + diffusion pipeline for virtual upmixing of first-order ambisonics (FOA) steering vectors into higher-order ambisonics (HOA) representations. It provides model definitions, training scripts, and dataset tooling.
 
-![SIRUP pipeline](full_pipeline_zoom_paper-1-1.png)
+![SIRUP pipeline](figs/full_pipeline_zoom_paper-1-1.png)
 
 ## Installation
 
