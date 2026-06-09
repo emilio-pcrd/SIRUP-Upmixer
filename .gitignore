@@ -2,4 +2,4 @@ __init__/
 
 __pycache__/
 
-
+notebooks/*.ipynb
